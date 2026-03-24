@@ -111,9 +111,9 @@ const registerUser = async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      role: 'customer',
+      role: 'user',
       status: 'pending', // Force verification
-      permissions: ['view_customer_portal'],
+      permissions: [],
       resetPasswordOtp: otp,
       resetPasswordExpires: expireDate
     });

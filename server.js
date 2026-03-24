@@ -35,8 +35,16 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Enable CORS
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001,https://digital-pylot-frontend-five.vercel.app').split(',');
+
 app.use(cors({
-  origin: 'http://localhost:3000', // adjust per frontend port
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS not allowed for this origin'));
+    }
+  },
   credentials: true
 }));
 
