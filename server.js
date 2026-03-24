@@ -4,6 +4,8 @@ const cors = require('cors');
 const morgan = require('morgan');
 const os = require('os');
 const connectDB = require('./config/db');
+const https = require('https');
+
 
 // Load env vars
 dotenv.config();
@@ -95,4 +97,21 @@ app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode`);
   console.log(`Local:            http://localhost:${PORT}`);
   console.log(`On Your Network:  http://${localIp}:${PORT}`);
+
+  // Keep-Alive Ping (Prevent Render from sleeping)
+  if (process.env.NODE_ENV === 'production') {
+    const SERVICE_URL = process.env.RENDER_EXTERNAL_URL;
+    if (SERVICE_URL) {
+      setInterval(() => {
+        https.get(SERVICE_URL, (res) => {
+          console.log(`Keep-alive ping sent to ${SERVICE_URL}: Status ${res.statusCode}`);
+        }).on('error', (err) => {
+          console.error('Keep-alive ping failed:', err.message);
+        });
+      }, 14 * 60 * 1000); // 14 minutes
+    } else {
+      console.warn('RENDER_EXTERNAL_URL not found. Self-ping skipped.');
+    }
+  }
 });
+
