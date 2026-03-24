@@ -18,7 +18,7 @@ const checkGrantCeiling = (managerPermissions, requestedPermissions) => {
 const getUsers = async (req, res) => {
   try {
     let users;
-    if (req.user.role === 'Admin') {
+    if (req.user.role === 'admin') {
       users = await User.find({}).select('-password');
     } else {
       // Return users managed by this user
@@ -43,8 +43,8 @@ const createUser = async (req, res) => {
     }
 
     // Role hierarchy checking
-    if (req.user.role !== 'Admin') {
-      if (role === 'Admin' || (req.user.role === 'Manager' && role === 'Manager')) {
+    if (req.user.role !== 'admin') {
+      if (role === 'admin' || (req.user.role === 'manager' && role === 'manager')) {
         return res.status(403).json({ message: 'Cannot create a user with a higher or equal role' });
       }
       
@@ -61,9 +61,9 @@ const createUser = async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      role: role || 'Customer',
+      role: role || 'user',
       permissions: permissions || [],
-      managedBy: req.user.role !== 'Admin' ? req.user._id : null,
+      managedBy: req.user.role !== 'admin' ? req.user._id : null,
       avatar, phone, location
     });
 
@@ -104,11 +104,11 @@ const updateUser = async (req, res) => {
     }
 
     // Checking if requester can edit this user
-    if (req.user.role !== 'Admin' && (!user.managedBy || user.managedBy.toString() !== req.user._id.toString())) {
+    if (req.user.role !== 'admin' && (!user.managedBy || user.managedBy.toString() !== req.user._id.toString())) {
       return res.status(403).json({ message: 'Not authorized to edit this user' });
     }
 
-    if (req.user.role !== 'Admin' && permissions) {
+    if (req.user.role !== 'admin' && permissions) {
       // Check grant ceiling
       if (!checkGrantCeiling(req.user.permissions || [], permissions)) {
         return res.status(403).json({ message: 'Grant Ceiling Error: You cannot grant permissions you do not have.' });
@@ -116,7 +116,7 @@ const updateUser = async (req, res) => {
     }
 
     if (name) user.name = name;
-    if (role && req.user.role === 'Admin') user.role = role; // Only Admin can change role strings
+    if (role && req.user.role === 'admin') user.role = role; // Only Admin can change role strings
     if (permissions) user.permissions = permissions;
     if (status) user.status = status;
     if (avatar) user.avatar = avatar;
@@ -157,7 +157,7 @@ const deleteUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (req.user.role !== 'Admin' && (!user.managedBy || user.managedBy.toString() !== req.user._id.toString())) {
+    if (req.user.role !== 'admin' && (!user.managedBy || user.managedBy.toString() !== req.user._id.toString())) {
       return res.status(403).json({ message: 'Not authorized to delete this user' });
     }
 

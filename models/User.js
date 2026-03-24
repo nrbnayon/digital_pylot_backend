@@ -6,13 +6,13 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { 
     type: String, 
-    enum: ['Admin', 'Manager', 'Agent', 'Customer'], 
-    default: 'Customer' 
+    enum: ['admin', 'manager', 'agent', 'customer', "user"], 
+    default: 'user' 
   },
   status: { 
     type: String, 
-    enum: ['Active', 'Suspended', 'Banned'], 
-    default: 'Active' 
+    enum: ['active', 'suspended', 'banned', "pending"], 
+    default: 'active' 
   },
   managedBy: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -24,6 +24,8 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, default: '' },
   location: { type: String, default: '' },
   refreshToken: { type: String, default: '' },
+  resetPasswordOtp: { type: String },
+  resetPasswordExpires: { type: Date }
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

@@ -13,7 +13,7 @@ const protect = async (req, res, next) => {
       
       req.user = await User.findById(decoded.id).select('-password');
 
-      if (!req.user || req.user.status !== 'Active') {
+      if (!req.user || req.user.status !== 'active') {
         return res.status(401).json({ message: 'Not authorized, account suspended' });
       }
 
@@ -40,7 +40,7 @@ const requirePermission = (atom) => {
     // "No page is locked to a specific role. Access is granted atom by atom."
     // However, Admin traditionally has all, or we explicitly assign atoms to Admin too.
     // Let's make Admin have everything implicitly to avoid lockout.
-    if (req.user.role === 'Admin') {
+    if (req.user.role === 'admin') {
       return next();
     }
 

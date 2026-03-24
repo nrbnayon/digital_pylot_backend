@@ -26,7 +26,7 @@ const loginUser = async (req, res) => {
 
     if (user && (await bcrypt.compare(password, user.password))) {
       
-      if (user.status !== 'Active') {
+      if (user.status !== 'active') {
         return res.status(403).json({ message: 'Account is suspended or banned' });
       }
 
@@ -60,6 +60,7 @@ const loginUser = async (req, res) => {
         role: user.role,
         permissions: user.permissions,
         token: accessToken, // 15min max memory
+        refreshToken: refreshToken, // returned for frontend storage
       });
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
@@ -69,28 +70,91 @@ const loginUser = async (req, res) => {
   }
 };
 
+// @desc    Register a public user (Customer)
+// @route   POST /api/auth/register
+// @access  Public
+const registerUser = async (req, res) => {
+  const { name, email, password } = req.body;
+
+  try {
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: 'customer',
+      permissions: ['view_customer_portal']
+    });
+
+    if (user) {
+      const accessToken = generateAccessToken(user._id);
+      const refreshToken = generateRefreshToken(user._id);
+
+      user.refreshToken = refreshToken;
+      await user.save();
+
+      res.cookie('jwt', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000
+      });
+
+      res.status(201).json({
+        _id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        permissions: user.permissions,
+        token: accessToken,
+        refreshToken: refreshToken,
+      });
+    } else {
+      res.status(400).json({ message: 'Invalid user data' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Refresh access token
-// @route   GET /api/auth/refresh
+// @route   POST /api/auth/refresh
 // @access  Public
 const refreshToken = async (req, res) => {
   const cookies = req.cookies;
-  if (!cookies?.jwt) return res.status(401).json({ message: 'Unauthorized' });
+  const bodyToken = req.body?.refresh_token;
 
-  const refreshToken = cookies.jwt;
+  const rToken = bodyToken || cookies?.jwt;
+
+  if (!rToken) return res.status(401).json({ message: 'Unauthorized' });
 
   try {
-    const user = await User.findOne({ refreshToken });
+    const user = await User.findOne({ refreshToken: rToken });
     if (!user) return res.status(403).json({ message: 'Forbidden' });
 
     jwt.verify(
-      refreshToken,
+      rToken,
       process.env.JWT_REFRESH_SECRET || 'refresh_secret',
       (err, decoded) => {
         if (err || user._id.toString() !== decoded.id) {
           return res.status(403).json({ message: 'Forbidden' });
         }
         const accessToken = generateAccessToken(user._id);
-        res.json({ token: accessToken });
+        const expires_at = Date.now() + 15 * 60 * 1000;
+        
+        res.json({ 
+          message: "Token refreshed successfully",
+          access_token: accessToken,
+          expires_in: 15 * 60 * 1000,
+          expires_at 
+        });
       }
     );
   } catch (error) {
@@ -137,9 +201,94 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+// @desc    Forgot Password
+// @route   POST /api/auth/forgot-password
+// @access  Public
+const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'No user found with that email' });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expireDate = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+    user.resetPasswordOtp = otp;
+    user.resetPasswordExpires = expireDate;
+    await user.save();
+
+    // Send email
+    const message = `Your password reset OTP is ${otp}. It is valid for 10 minutes.`;
+    const sendEmail = require('../utils/sendEmail');
+    await sendEmail({
+      email: user.email,
+      subject: 'Password Reset OTP',
+      message
+    });
+
+    res.json({ message: 'OTP sent to email', success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Verify OTP
+// @route   POST /api/auth/verify-otp
+// @access  Public
+const verifyOtp = async (req, res) => {
+  const { email, otp } = req.body;
+  try {
+    const user = await User.findOne({ email, resetPasswordOtp: otp });
+    
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid OTP or Email' });
+    }
+
+    if (user.resetPasswordExpires < new Date()) {
+      return res.status(400).json({ message: 'OTP has expired' });
+    }
+
+    res.json({ message: 'OTP verified successfully', verified: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Reset Password
+// @route   POST /api/auth/reset-password
+// @access  Public
+const resetPassword = async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  try {
+    const user = await User.findOne({ email, resetPasswordOtp: otp });
+    
+    if (!user) return res.status(400).json({ message: 'Invalid OTP or Email' });
+    if (user.resetPasswordExpires < new Date()) return res.status(400).json({ message: 'OTP has expired' });
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    
+    // reset OTP flags
+    user.resetPasswordOtp = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'Password reset successful', success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   loginUser,
+  registerUser,
   refreshToken,
   logoutUser,
   getUserProfile,
+  forgotPassword,
+  verifyOtp,
+  resetPassword
 };
