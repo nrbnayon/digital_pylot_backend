@@ -56,16 +56,17 @@ const loginUser = async (req, res) => {
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
 
       const contextCookieOptions = {
         httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: rememberMe ? 7 * 24 * 60 * 60 * 1000 : undefined,
       };
+
 
       res.cookie('userRole', user.role, contextCookieOptions);
       res.cookie('userEmail', user.email, contextCookieOptions);
@@ -79,7 +80,9 @@ const loginUser = async (req, res) => {
         role: user.role,
         permissions: user.permissions,
         accessToken: accessToken,
+        refreshToken: refreshToken,
       });
+
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -220,11 +223,23 @@ const logoutUser = async (req, res) => {
     }
   }
 
-  res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
-  res.clearCookie('userRole', { sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
-  res.clearCookie('userEmail', { sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
-  res.clearCookie('userName', { sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
-  res.clearCookie('userPermissions', { sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
+  const cookieOptions = {
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: process.env.NODE_ENV === 'production'
+  };
+
+  const publicCookieOptions = {
+    ...cookieOptions,
+    httpOnly: false
+  };
+
+  res.clearCookie('refreshToken', cookieOptions);
+  res.clearCookie('userRole', publicCookieOptions);
+  res.clearCookie('userEmail', publicCookieOptions);
+  res.clearCookie('userName', publicCookieOptions);
+  res.clearCookie('userPermissions', publicCookieOptions);
+
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
