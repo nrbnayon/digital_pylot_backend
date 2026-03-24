@@ -11,12 +11,12 @@ const {
 
 router
   .route('/')
-  .get(protect, requirePermission('view_jobs'), getJobs)
+  .get(getJobs)
   .post(protect, requirePermission('manage_jobs'), createJob);
 
 router
   .route('/:id')
-  .get(protect, requirePermission('view_jobs'), getJob)
+  .get(getJob)
   .put(protect, requirePermission('manage_jobs'), updateJob)
   .delete(protect, requirePermission('manage_jobs'), deleteJob);
 
