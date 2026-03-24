@@ -83,18 +83,7 @@ const loginUser = async (req, res) => {
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-      const contextCookieOptions = buildCookieOptions({
-        httpOnly: false,
-        maxAge: rememberMe ? 7 * 24 * 60 * 60 * 1000 : undefined,
-      });
-
       res.cookie('refreshToken', refreshToken, refreshCookieOptions);
-
-
-      res.cookie('userRole', user.role, contextCookieOptions);
-      res.cookie('userEmail', user.email, contextCookieOptions);
-      res.cookie('userName', user.name, contextCookieOptions);
-      res.cookie('userPermissions', JSON.stringify(user.permissions || []), contextCookieOptions);
 
       res.json({
         _id: user.id,
