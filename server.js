@@ -39,7 +39,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Enable CORS
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001,https://digital-pylot-frontend-five.vercel.app')
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001,https://digital-pylot-frontend-five.vercel.app,https://console.cron-job.org')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
