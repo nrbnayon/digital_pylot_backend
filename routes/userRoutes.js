@@ -5,11 +5,11 @@ const { protect, requirePermission } = require('../middleware/authMiddleware');
 
 // Base requirements: Any user making changes needs manage_users permission
 router.route('/')
-  .get(protect, requirePermission('users:read'), getUsers)
-  .post(protect, requirePermission('users:write'), createUser);
+  .get(protect, requirePermission('manage_users'), getUsers)
+  .post(protect, requirePermission('manage_users'), createUser);
 
 router.route('/:id')
-  .put(protect, requirePermission('users:write'), updateUser)
-  .delete(protect, requirePermission('users:delete'), deleteUser);
+  .put(protect, requirePermission('manage_users'), updateUser)
+  .delete(protect, requirePermission('manage_users'), deleteUser);
 
 module.exports = router;
