@@ -28,6 +28,10 @@ const loginUser = async (req, res) => {
       // Robust status check
       const status = (user.status || '').toString().trim().toLowerCase();
       
+      if (status === 'pending') {
+        return res.status(403).json({ message: 'Account is pending verification. Please verify your email first.' });
+      }
+      
       if (status !== 'active') {
         return res.status(403).json({ message: 'Account is suspended or banned' });
       }
@@ -48,7 +52,7 @@ const loginUser = async (req, res) => {
       });
 
       // Send refresh token in httpOnly cookie
-      res.cookie('jwt', refreshToken, {
+      res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -61,8 +65,8 @@ const loginUser = async (req, res) => {
         email: user.email,
         role: user.role,
         permissions: user.permissions,
-        token: accessToken, // 15min max memory
-        refreshToken: refreshToken, // returned for frontend storage
+        accessToken: accessToken, 
+        refreshToken: refreshToken, 
       });
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
@@ -87,36 +91,38 @@ const registerUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Generate 6-digit OTP for verification
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expireDate = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
       role: 'customer',
-      permissions: ['view_customer_portal']
+      status: 'pending', // Force verification
+      permissions: ['view_customer_portal'],
+      resetPasswordOtp: otp,
+      resetPasswordExpires: expireDate
     });
 
     if (user) {
-      const accessToken = generateAccessToken(user._id);
-      const refreshToken = generateRefreshToken(user._id);
-
-      user.refreshToken = refreshToken;
-      await user.save();
-
-      res.cookie('jwt', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      // Send email
+      try {
+        const sendEmail = require('../utils/sendEmail');
+        await sendEmail({
+          email: user.email,
+          subject: 'Welcome to Digital Pylot - Verify Your Account',
+          message: `Your verification OTP is ${otp}. It is valid for 10 minutes.`
+        });
+      } catch (err) {
+        console.error('Email sending failed during registration:', err);
+      }
 
       res.status(201).json({
-        _id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        permissions: user.permissions,
-        token: accessToken,
-        refreshToken: refreshToken,
+         message: 'Registration successful. OTP sent to email.',
+         email: user.email,
+         status: 'pending'
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
@@ -133,7 +139,7 @@ const refreshToken = async (req, res) => {
   const cookies = req.cookies;
   const bodyToken = req.body?.refresh_token;
 
-  const rToken = bodyToken || cookies?.jwt;
+  const rToken = bodyToken || cookies?.refreshToken;
 
   if (!rToken) return res.status(401).json({ message: 'Unauthorized' });
 
@@ -169,21 +175,22 @@ const refreshToken = async (req, res) => {
 // @access  Public
 const logoutUser = async (req, res) => {
   const cookies = req.cookies;
-  if (!cookies?.jwt) return res.sendStatus(204);
+  const rToken = cookies?.refreshToken;
 
-  const refreshToken = cookies.jwt;
-
-  try {
-    const user = await User.findOne({ refreshToken });
-    if (user) {
-      user.refreshToken = '';
-      await user.save();
+  if (rToken) {
+    try {
+      const user = await User.findOne({ refreshToken: rToken });
+      if (user) {
+        user.refreshToken = '';
+        await user.save();
+      }
+    } catch (error) {
+      console.error(error);
     }
-  } catch (error) {
-    console.error(error);
   }
 
-  res.clearCookie('jwt', { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
+  res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
+  res.clearCookie('accessToken', { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
@@ -252,6 +259,15 @@ const verifyOtp = async (req, res) => {
     if (user.resetPasswordExpires < new Date()) {
       return res.status(400).json({ message: 'OTP has expired' });
     }
+
+    // If they were pending (signup flow), activate them now
+    if (user.status === 'pending') {
+        user.status = 'active';
+    }
+
+    user.resetPasswordOtp = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
 
     res.json({ message: 'OTP verified successfully', verified: true });
   } catch (error) {
