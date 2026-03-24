@@ -113,7 +113,7 @@ const registerUser = async (req, res) => {
       password: hashedPassword,
       role: 'user',
       status: 'pending', // Force verification
-      permissions: [],
+      permissions: ['view_applications', 'view_notifications', 'customer'],
       resetPasswordOtp: otp,
       resetPasswordExpires: expireDate
     });
