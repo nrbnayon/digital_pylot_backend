@@ -14,7 +14,9 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
+const auditRoutes = require('./routes/auditRoutes');
 const cookieParser = require('cookie-parser');
+const { cleanupBlacklist } = require('./utils/tokenBlacklist');
 
 // Connect to database
 connectDB();
@@ -44,6 +46,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/audit-logs', auditRoutes);
 
 // Root route
 app.get('/', (req, res) => {
@@ -53,6 +56,12 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
+  cleanupBlacklist().catch((error) => console.error('Blacklist cleanup failed:', error));
+
+  setInterval(() => {
+    cleanupBlacklist().catch((error) => console.error('Blacklist cleanup failed:', error));
+  }, 60 * 60 * 1000);
+
   // Get local IP
   const interfaces = os.networkInterfaces();
   let localIp = 'localhost';
