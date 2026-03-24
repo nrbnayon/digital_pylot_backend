@@ -5,13 +5,16 @@ const morgan = require('morgan');
 const os = require('os');
 const connectDB = require('./config/db');
 
+// Load env vars
+dotenv.config();
+
 // Route files
 const jobRoutes = require('./routes/jobRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
-
-// Load env vars
-dotenv.config();
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const cookieParser = require('cookie-parser');
 
 // Connect to database
 connectDB();
@@ -21,8 +24,14 @@ const app = express();
 // Body parser
 app.use(express.json());
 
+// Cookie parser
+app.use(cookieParser());
+
 // Enable CORS
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000', // adjust per frontend port
+  credentials: true
+}));
 
 // Dev logging middleware
 if (process.env.NODE_ENV !== 'production') {
@@ -33,6 +42,8 @@ if (process.env.NODE_ENV !== 'production') {
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 
 // Root route
 app.get('/', (req, res) => {
